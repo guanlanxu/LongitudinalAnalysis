@@ -2,7 +2,7 @@
 
 /*Load data*/
 PROC IMPORT OUT= WORK.proj 
-            DATAFILE= "H:\001Courses\02_long\Pigs_data.csv" 
+            DATAFILE= "path\to\the\data" 
             DBMS=CSV REPLACE;
      GETNAMES=YES;
      DATAROW=2; 
