@@ -1,0 +1,212 @@
+
+
+/*Load data*/
+PROC IMPORT OUT= WORK.proj 
+            DATAFILE= "H:\001Courses\02_long\Pigs_data.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+proc print data = proj;
+run;
+
+
+/* Wide to long format*/
+data proj_long;
+set proj;
+ y = week0; time = 0; output;
+ y = week2; time = 2; output;
+ y = week4; time = 4; output;
+ y = week6; time = 6; output;
+ y = week8; time = 8; output;
+y = week10; time = 10; output;
+drop week0 week2 week4 week6 week8 week10 ;
+run;
+
+proc print data = proj_long;run;
+
+
+*Testing normality assumptions using UNIVARIATE AND CAPABILITY procedures;
+PROC UNIVARIATE DATA=longpigs NORMAL PLOT;
+VAR y;
+QQPLOT y /NORMAL(MU=EST SIGMA=EST COLOR=RED L=1);
+RUN;
+ 
+PROC CAPABILITY DATA=longpigs NORMAL;
+VAR y;
+QQPLOT y /NORMAL(MU=EST SIGMA=EST COLOR=RED L=1);
+PPPLOT y /NORMAL(MU=EST SIGMA=EST COLOR=RED L=1);
+HISTOGRAM /NORMAL(COLOR=MAROON W=4) CFILL = BLUE CFRAME = LIGR;
+INSET MEAN STD /CFILL=BLANK FORMAT=5.2 ;
+RUN;
+
+
+* Descriptive statistics;
+proc means data=proj_long n mean std var nway;
+var y;
+class treatment time;
+output out=meandata mean=meany;
+run;
+
+* Mean trajectory;
+symbol1 interpol=join
+        value=dot;
+proc gplot data=meandata;
+plot meany*time=treatment /;
+title 'Mean weight against Time';
+run;
+
+
+
+/*Covariance Variance*/
+
+
+* Step1: * sort data;
+proc sort data = proj_long; by descending treatment descending  time; run;
+proc print data = proj_long;run;
+
+* Step2: fit reponse profie model with UN;
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y= time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=UN SUBJECT=id R RCORR;
+RUN;
+
+
+* Step 3 Fit other covariance structures;
+	* AR(1);
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y=treatment time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=AR(1) SUBJECT=id R RCORR;  
+RUN;
+
+DATA pvalues;chsq = SDF('chisquare',201.1,19);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+	* ARH(1);
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y=treatment time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=ARH(1) SUBJECT=id R RCORR; 
+RUN;
+
+DATA pvalues;chsq = SDF('chisquare',117,14);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+	*CS;
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y=treatment time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=CS SUBJECT=id R RCORR;  
+RUN;
+
+DATA pvalues;chsq = SDF('chisquare',386,19);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+	*CSH;
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y=treatment time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=CSH SUBJECT=id R RCORR;  
+RUN;
+
+DATA pvalues;chsq = SDF('chisquare',284.7,14);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+	*TOEP;
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y=treatment time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=TOEP SUBJECT=id R RCORR;  
+RUN;
+
+DATA pvalues;chsq = SDF('chisquare',162.4,15);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+	*TOEPH;
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment time;
+MODEL Y=treatment time treatment*time / SOLUTION CHISQ;
+REPEATED time / TYPE=TOEPH SUBJECT=id R RCORR;  
+RUN;
+
+DATA pvalues;chsq = SDF('chisquare',82.3,11);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+
+
+
+/*model selection*/
+
+* Add t , t2, t3, t4;
+data proj_long; set proj_long; t= time;
+	t2 = time*time; 
+	t3 = time*time*time; 
+	t4 = time*time*time*time; run;
+proc print data = proj_long ; run;
+
+*Linear Model;
+proc mixed data = proj_long order = data method = ml;
+class id treatment t ;
+model y =  time time*treatment/s chisq;
+repeated t/type=UN subject=id r rcorr;
+RUN;
+
+*Quadratic Model;
+proc mixed data = proj_long order = data method = ml;
+class id treatment t ;
+model y =  time time*treatment t2 t2*treatment/s chisq;
+repeated t/type=UN subject=id r rcorr;
+RUN;
+
+*Cubic Model;
+proc mixed data = proj_long order = data method = ml;
+class id treatment t ;
+model y =  time time*treatment t2 t2*treatment t3 t3*treatment/s chisq;
+repeated t/type=UN subject=id r rcorr;
+RUN;
+
+*Quartic Model;
+proc mixed data = proj_long order = data method = ml;
+class id treatment t ;
+model y =  time time*treatment t2 t2*treatment t3 t3*treatment t4 t4*treatment/s chisq;
+repeated t/type=UN subject=id r rcorr;
+RUN;
+
+* Get p-values;
+
+DATA pvalues;chsq = SDF('chisquare',49.3,6);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+DATA pvalues;chsq = SDF('chisquare',107.1,6);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+DATA pvalues;chsq = SDF('chisquare',38.6,6);RUN;
+PROC PRINT DATA=pvalues;RUN; 
+
+/* Linear model with UN */
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment t;
+MODEL Y= time treatment*time / SOLUTION CHISQ;
+REPEATED t / TYPE=UN SUBJECT=id R RCORR;
+RUN;
+
+* adding contrasts;
+PROC MIXED DATA=proj_long order = data;
+CLASS id treatment t;
+MODEL Y= time treatment*time / SOLUTION CHISQ;
+REPEATED t / TYPE=UN SUBJECT=id R RCORR;
+contrast "trt 1 vs 2"  treatment*time   0 0 0 1 -1 0/E;  
+contrast "trt 1 vs 3"  treatment*time   0 0 1 0 -1 0 /E;  
+contrast "trt 1 vs 4"  treatment*time   0 1 0 0 -1 0 /E;  
+contrast "trt 1 vs 5"  treatment*time   1 0 0 0 -1 0/E;  
+contrast "trt 2 vs 3"  treatment*time   0 0 1 -1 0 0/E;  
+contrast "trt 2 vs 4"  treatment*time   0 1 0 -1 0 0 /E;  
+contrast "trt 2 vs 5"  treatment*time   1 0 0 -1 0 0 /E;  
+contrast "trt 3 vs 4"  treatment*time   0 1 -1 0 0 0/E;  
+contrast "trt 3 vs 5"  treatment*time   1 0 -1 0 0 0 /E;  
+contrast "trt 4 vs 5"  treatment*time   1 -1 0 0 0 0 /E;  
+RUN;
+
